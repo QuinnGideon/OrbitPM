@@ -129,10 +129,12 @@ const Dashboard: React.FC<DashboardProps> = ({ jobs, onJobClick }) => {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-200 uppercase tracking-wider">Rounds Completed</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-200 uppercase tracking-wider flex items-center gap-1">
                     Velocity
-                    <div className="group relative">
+                    <div className="group relative ml-1">
                       <Info size={14} className="text-gray-400 cursor-help" />
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
+                      <div className="absolute right-full top-1/2 transform -translate-y-1/2 mr-2 w-48 px-3 py-2 bg-gray-900 text-white text-xs font-normal normal-case rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center border border-gray-700">
                         Percentage of interview rounds completed vs. total rounds.
+                        {/* Arrow */}
+                        <div className="absolute top-1/2 -right-1 transform -translate-y-1/2 border-4 border-transparent border-l-gray-900"></div>
                       </div>
                     </div>
                   </th>
