@@ -24,14 +24,65 @@ const getSafeErrorMessage = (err: any): string => {
 
   // Fallback: try to stringify the whole object
   try {
-    return JSON.stringify(err);
+    return JSON.stringify(err, null, 2);
   } catch (e) {
     return 'An error occurred (details could not be parsed)';
   }
 };
 
+interface GlobalErrorBoundaryProps {
+  children?: React.ReactNode;
+}
+
+interface GlobalErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+
+// --- Global Error Boundary ---
+class GlobalErrorBoundary extends React.Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
+  public state: GlobalErrorBoundaryState;
+
+  constructor(props: GlobalErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any): GlobalErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Uncaught Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
+          <div className="max-w-md text-center">
+            <h2 className="text-2xl font-bold mb-4 text-red-400">Something went wrong</h2>
+            <p className="mb-4 text-gray-300">The application encountered a critical error.</p>
+            <pre className="bg-gray-800 p-4 rounded text-left overflow-auto text-xs mb-6 text-red-200 whitespace-pre-wrap">
+              {getSafeErrorMessage(this.state.error)}
+            </pre>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-primary-600 hover:bg-primary-700 px-6 py-2 rounded-lg font-medium"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // --- Local Storage Implementation ---
-const LocalApp: React.FC<{ onOpenSettings: () => void }> = ({ onOpenSettings }) => {
+const LocalApp: React.FC<{ onOpenSettings: () => void, googleClientId?: string }> = ({ onOpenSettings, googleClientId }) => {
   const [jobs, setJobs] = useState<JobApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -75,9 +126,10 @@ const LocalApp: React.FC<{ onOpenSettings: () => void }> = ({ onOpenSettings }) 
       jobs={jobs}
       isLoading={isLoading}
       isConnected={false}
+      googleClientId={googleClientId}
       onAddJob={handleAdd}
       onUpdateJob={handleUpdate}
-      onDeleteJob={handleDelete}
+      onDeleteJob={handleDelete} 
       onOpenSettings={onOpenSettings}
     />
   );
@@ -254,7 +306,7 @@ const LoginScreen: React.FC<{ db: any, onBackToSettings: () => void }> = ({ db, 
 };
 
 // --- InstantDB Implementation ---
-const InstantDBApp: React.FC<{ appId: string, onOpenSettings: () => void }> = ({ appId, onOpenSettings }) => {
+const InstantDBApp: React.FC<{ appId: string, onOpenSettings: () => void, googleClientId?: string }> = ({ appId, onOpenSettings, googleClientId }) => {
   // Initialize DB
   const db = useMemo(() => init({ appId }), [appId]);
   
@@ -332,6 +384,7 @@ const InstantDBApp: React.FC<{ appId: string, onOpenSettings: () => void }> = ({
       isLoading={dataLoading}
       isConnected={true}
       userEmail={user.email}
+      googleClientId={googleClientId}
       onAddJob={handleAdd}
       onUpdateJob={handleUpdate}
       onDeleteJob={handleDelete}
@@ -344,8 +397,11 @@ const InstantDBApp: React.FC<{ appId: string, onOpenSettings: () => void }> = ({
 // --- Main App Controller ---
 const App: React.FC = () => {
   const [dbAppId, setDbAppId] = useState<string | null>(localStorage.getItem('instantdb-id'));
+  const [googleClientId, setGoogleClientId] = useState<string | undefined>(localStorage.getItem('google-client-id') || undefined);
+  
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [inputAppId, setInputAppId] = useState(dbAppId || '');
+  const [inputGoogleClientId, setInputGoogleClientId] = useState(googleClientId || '');
 
   // Theme initialization
   useEffect(() => {
@@ -361,6 +417,8 @@ const App: React.FC = () => {
 
   const handleSaveSettings = () => {
     const trimmedId = inputAppId.trim();
+    const trimmedGoogleId = inputGoogleClientId.trim();
+
     if (trimmedId) {
       localStorage.setItem('instantdb-id', trimmedId);
       setDbAppId(trimmedId);
@@ -368,15 +426,24 @@ const App: React.FC = () => {
       localStorage.removeItem('instantdb-id');
       setDbAppId(null);
     }
+
+    if (trimmedGoogleId) {
+      localStorage.setItem('google-client-id', trimmedGoogleId);
+      setGoogleClientId(trimmedGoogleId);
+    } else {
+      localStorage.removeItem('google-client-id');
+      setGoogleClientId(undefined);
+    }
+
     setIsSettingsOpen(false);
   };
 
   return (
-    <>
+    <GlobalErrorBoundary>
       {dbAppId ? (
-        <InstantDBApp appId={dbAppId} onOpenSettings={() => setIsSettingsOpen(true)} />
+        <InstantDBApp appId={dbAppId} googleClientId={googleClientId} onOpenSettings={() => setIsSettingsOpen(true)} />
       ) : (
-        <LocalApp onOpenSettings={() => setIsSettingsOpen(true)} />
+        <LocalApp googleClientId={googleClientId} onOpenSettings={() => setIsSettingsOpen(true)} />
       )}
 
       {/* Settings Modal */}
@@ -393,17 +460,9 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
-                <p className="font-semibold mb-1">Sync across devices</p>
-                <p>PM Orbit supports <a href="https://instantdb.com" target="_blank" rel="noreferrer" className="underline hover:text-blue-600 dark:hover:text-blue-300">InstantDB</a> for real-time sync. To enable it:</p>
-                <ol className="list-decimal list-inside mt-2 space-y-1 ml-1">
-                   <li>Go to instantdb.com and click "Get Started"</li>
-                   <li>Create a new App</li>
-                   <li>Copy your <strong>App ID</strong> from the URL or Home</li>
-                </ol>
-              </div>
-
+            <div className="space-y-6">
+              
+              {/* InstantDB Section */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">InstantDB App ID</label>
                 <input 
@@ -413,7 +472,25 @@ const App: React.FC = () => {
                   placeholder="e.g. 29a1c..."
                   className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm font-mono text-gray-900 dark:text-white"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Leave empty to use local browser storage.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable cloud sync across devices.</p>
+              </div>
+
+              {/* Google Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Google Client ID (Gmail)</label>
+                <input 
+                  type="text" 
+                  value={inputGoogleClientId}
+                  onChange={(e) => setInputGoogleClientId(e.target.value)}
+                  placeholder="e.g. 123...apps.googleusercontent.com"
+                  className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm font-mono text-gray-900 dark:text-white"
+                />
+                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable "Inbox Insights" to scan emails for interview updates.</p>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
+                 <p className="font-semibold mb-1">Setup Guide</p>
+                 <p className="text-xs">Check the <a href="#" className="underline font-bold">README</a> for instructions on how to generate these IDs.</p>
               </div>
             </div>
 
@@ -434,7 +511,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-    </>
+    </GlobalErrorBoundary>
   );
 };
 

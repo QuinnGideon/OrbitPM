@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { JobApplication } from '../types';
+import { JobApplication, JobStatus, GmailSuggestion } from '../types';
 import Dashboard from './Dashboard';
 import JobCard from './JobCard';
 import JobModal from './JobModal';
 import AddJobModal from './AddJobModal';
 import CalendarView from './CalendarView';
-import { Layout, Plus, Search, ListFilter, ArrowUpDown, Database, Cloud, Settings, LogOut, Shield, Sun, Moon, Calendar } from './Icons';
+import { initGoogleAuth, checkGmailForUpdates } from '../services/gmailService';
+import { Layout, Plus, Search, ListFilter, ArrowUpDown, Database, Cloud, Settings, LogOut, Shield, Sun, Moon, Calendar, Sparkles, Mail, CheckCircle, XCircle, BarChart3, Clock } from './Icons';
+import { id } from '@instantdb/react';
 
 type SortOption = 'updated' | 'applied_newest' | 'applied_oldest' | 'company' | 'interest' | 'status';
 
@@ -14,6 +16,7 @@ interface PMOrbitUIProps {
   isLoading: boolean;
   isConnected: boolean;
   userEmail?: string;
+  googleClientId?: string;
   onAddJob: (job: JobApplication) => void;
   onUpdateJob: (job: JobApplication) => void;
   onDeleteJob: (id: string) => void;
@@ -26,6 +29,7 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
   isLoading, 
   isConnected,
   userEmail,
+  googleClientId,
   onAddJob, 
   onUpdateJob, 
   onDeleteJob,
@@ -38,12 +42,30 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('updated');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // Gmail Integration State
+  const [suggestions, setSuggestions] = useState<GmailSuggestion[]>([]);
+  const [isCheckingGmail, setIsCheckingGmail] = useState(false);
+  const [showInsights, setShowInsights] = useState(true);
+  const [lastChecked, setLastChecked] = useState<string | null>(localStorage.getItem('pm-orbit-last-gmail-check'));
+
+  // Check if scan is overdue (older than 8 hours)
+  const isScanOverdue = useMemo(() => {
+    if (!lastChecked) return true;
+    const eightHours = 8 * 60 * 60 * 1000;
+    return (new Date().getTime() - new Date(lastChecked).getTime()) > eightHours;
+  }, [lastChecked]);
 
   useEffect(() => {
     if (document.documentElement.classList.contains('dark')) {
       setTheme('dark');
     }
-  }, []);
+    
+    // Init Google Auth if Client ID is present
+    if (googleClientId) {
+      initGoogleAuth(googleClientId);
+    }
+  }, [googleClientId]);
 
   const toggleTheme = () => {
     if (theme === 'light') {
@@ -55,6 +77,63 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+  };
+
+  const handleCheckGmail = async () => {
+    if (!googleClientId) {
+      alert("Please add your Google Client ID in Settings first.");
+      onOpenSettings();
+      return;
+    }
+    setIsCheckingGmail(true);
+    try {
+      const results = await checkGmailForUpdates();
+      setSuggestions(results);
+      
+      // Update Last Checked
+      const now = new Date().toISOString();
+      setLastChecked(now);
+      localStorage.setItem('pm-orbit-last-gmail-check', now);
+
+      if (results.length === 0) {
+        // Optional: Toast notification here
+        console.log("No new updates found.");
+      }
+    } catch (error) {
+      console.error("Gmail check failed", error);
+    } finally {
+      setIsCheckingGmail(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: GmailSuggestion) => {
+    // Find existing job or create new
+    const existingJob = jobs.find(j => j.company.toLowerCase().includes(suggestion.company.toLowerCase()));
+    
+    if (existingJob) {
+      onUpdateJob({ ...existingJob, status: suggestion.newStatus, lastUpdated: new Date().toISOString() });
+    } else {
+      // Create new job from email
+      onAddJob({
+        id: id(),
+        company: suggestion.company,
+        title: suggestion.title || 'Unknown Role',
+        status: suggestion.newStatus,
+        source: 'Other', // Email found
+        appliedDate: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        interestLevel: 3,
+        description: suggestion.reason,
+        fullDescription: suggestion.emailSnippet,
+        stages: []
+      });
+    }
+    // Remove suggestion
+    setSuggestions(suggestions.filter(s => s.id !== suggestion.id));
+  };
+
+  const dismissSuggestion = (id: string) => {
+    setSuggestions(suggestions.filter(s => s.id !== id));
   };
 
   const handleUpdateJob = (updatedJob: JobApplication) => {
@@ -91,6 +170,16 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
         return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
     }
   });
+
+  // Helper for displaying time ago
+  const formatTimeAgo = (dateString: string) => {
+    const diff = new Date().getTime() - new Date(dateString).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 1) return 'Just now';
+    if (hours === 1) return '1 hour ago';
+    if (hours > 24) return `${Math.floor(hours/24)} days ago`;
+    return `${hours} hours ago`;
+  };
 
   if (isLoading) {
     return (
@@ -173,19 +262,22 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
                onClick={() => setView('board')}
                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'board' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
              >
-               Board
+               <Layout size={18} className="sm:hidden" />
+               <span className="hidden sm:inline">Board</span>
              </button>
              <button 
                onClick={() => setView('calendar')}
                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1 ${view === 'calendar' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
              >
-               Calendar
+               <Calendar size={18} className="sm:hidden" />
+               <span className="hidden sm:inline">Calendar</span>
              </button>
              <button 
                onClick={() => setView('dashboard')}
                className={`px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'dashboard' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
              >
-               Metrics
+               <BarChart3 size={18} className="sm:hidden" />
+               <span className="hidden sm:inline">Metrics</span>
              </button>
            </div>
 
@@ -208,6 +300,96 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
 
         {view === 'board' && (
           <>
+             {/* Inbox Insights Section */}
+             {googleClientId && showInsights && (
+               <div className="mb-8 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl border border-purple-100 dark:border-purple-800 p-6 relative overflow-hidden">
+                 <div className="flex justify-between items-start relative z-10">
+                   <div>
+                     <h3 className="text-lg font-bold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                       <Sparkles className="text-purple-600 dark:text-purple-400" size={20} />
+                       Inbox Insights
+                     </h3>
+                     <p className="text-purple-700 dark:text-purple-300 text-sm mt-1">
+                       AI-powered email scanning for interview updates.
+                     </p>
+                   </div>
+                   <div className="flex items-center gap-3">
+                     {lastChecked && (
+                        <div className={`text-xs font-medium flex items-center gap-1 ${isScanOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                           <Clock size={12} />
+                           Last scan: {formatTimeAgo(lastChecked)}
+                        </div>
+                     )}
+                     
+                     <button 
+                       onClick={handleCheckGmail}
+                       disabled={isCheckingGmail}
+                       className="relative bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/50 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all flex items-center gap-2"
+                     >
+                       {isCheckingGmail ? (
+                         <>
+                           <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                           Scanning...
+                         </>
+                       ) : (
+                         <>
+                           <Mail size={16} /> 
+                           Check Updates
+                           {isScanOverdue && (
+                             <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+                           )}
+                         </>
+                       )}
+                     </button>
+                     <button onClick={() => setShowInsights(false)} className="text-purple-400 hover:text-purple-600 p-1">
+                       <XCircle size={20} />
+                     </button>
+                   </div>
+                 </div>
+
+                 {suggestions.length > 0 && (
+                   <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                     {suggestions.map(suggestion => (
+                       <div key={suggestion.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-purple-100 dark:border-purple-800/50 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4">
+                         <div className="flex justify-between items-start">
+                           <div>
+                             <h4 className="font-bold text-gray-900 dark:text-white">{suggestion.company}</h4>
+                             <div className="flex items-center gap-2 mt-1">
+                               <span className="text-xs text-gray-500 dark:text-gray-400">Suggested Update:</span>
+                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                  suggestion.newStatus === JobStatus.REJECTED ? 'bg-red-100 text-red-800' :
+                                  suggestion.newStatus === JobStatus.OFFER ? 'bg-green-100 text-green-800' :
+                                  'bg-blue-100 text-blue-800'
+                               }`}>
+                                 {suggestion.newStatus}
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+                         <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 p-2 rounded italic">
+                           "{suggestion.reason}"
+                         </p>
+                         <div className="flex gap-2 mt-1">
+                           <button 
+                             onClick={() => applySuggestion(suggestion)}
+                             className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium py-1.5 rounded flex items-center justify-center gap-1"
+                           >
+                             <CheckCircle size={12} /> Apply Update
+                           </button>
+                           <button 
+                             onClick={() => dismissSuggestion(suggestion.id)}
+                             className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium py-1.5 rounded"
+                           >
+                             Dismiss
+                           </button>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             )}
+
              <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                <div>
                  <h2 className="text-2xl font-bold text-gray-800 dark:text-white transition-colors">Active Applications</h2>
@@ -286,3 +468,4 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
 };
 
 export default PMOrbitUI;
+import { useMemo } from 'react';

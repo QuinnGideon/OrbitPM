@@ -48,3 +48,13 @@ export interface DashboardMetrics {
   offerRate: number;
   interviewingCount: number;
 }
+
+export interface GmailSuggestion {
+  id: string;
+  company: string;
+  title?: string;
+  newStatus: JobStatus;
+  reason: string; // "Email from recruiter says..."
+  emailDate: string;
+  emailSnippet: string;
+}
