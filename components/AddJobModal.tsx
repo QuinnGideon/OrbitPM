@@ -47,7 +47,7 @@ const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd }) => 
           id: id(), // Generate unique UUIDs for stages
           name: stageName,
           status: StageStatus.PENDING,
-          type: idx === 0 ? 'Recruiter Screen' : 'Other',
+          type: 'Other',
           date: undefined
         }))
       };
@@ -93,13 +93,18 @@ const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white">Track New Opportunity</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Add a new role to your orbit.</p>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-gray-700 h-full sm:h-auto sm:rounded-2xl rounded-none">
+        <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Track New Opportunity</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Add a new role to your pipeline.</p>
+          </div>
+           <button onClick={onClose} className="sm:hidden text-gray-500">
+            Close
+          </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 h-full sm:h-auto overflow-y-auto">
           <div className="flex gap-4 mb-6">
              <button 
                onClick={() => setMode('smart')}
@@ -184,7 +189,7 @@ const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd }) => 
           )}
         </div>
 
-        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 pb-safe">
           <button 
             onClick={onClose}
             className="px-4 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -202,7 +207,7 @@ const AddJobModal: React.FC<AddJobModalProps> = ({ isOpen, onClose, onAdd }) => 
                 Analyzing...
               </>
             ) : (
-              'Add to Orbit'
+              'Add to Pipeline'
             )}
           </button>
         </div>

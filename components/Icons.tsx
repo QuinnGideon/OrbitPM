@@ -36,7 +36,8 @@ import {
   Moon,
   ChevronLeft,
   Info,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 
 export { 
@@ -76,5 +77,6 @@ export {
   Moon,
   ChevronLeft,
   Info,
-  Sparkles
+  Sparkles,
+  Download
 };

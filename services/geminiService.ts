@@ -24,7 +24,7 @@ export const parseJobDescription = async (text: string) => {
       suggestedStages: {
         type: Type.ARRAY,
         items: { type: Type.STRING },
-        description: "A list of probable interview stages based on the description (e.g., 'Recruiter Screen', 'Case Study')."
+        description: "A list of probable interview stages based on the description (e.g., 'Recruiter Screen', 'Technical Round')."
       }
     },
     required: ["company", "title", "summary", "suggestedStages"]
@@ -37,7 +37,7 @@ export const parseJobDescription = async (text: string) => {
     {
       role: 'user',
       parts: [
-        { text: `Analyze the following job description or job related text. Extract key details to help a Product Manager track their application.\n\nText:\n"${cleanText}"` }
+        { text: `Analyze the following job description or job related text. Extract key details to help a professional track their application.\n\nText:\n"${cleanText}"` }
       ]
     }
   ];
@@ -49,7 +49,7 @@ export const parseJobDescription = async (text: string) => {
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        systemInstruction: "You are a helpful career assistant for a Product Manager. Be precise and helpful."
+        systemInstruction: "You are a helpful career assistant for a job seeker. Be precise and helpful."
       }
     });
 

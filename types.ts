@@ -1,3 +1,4 @@
+
 export enum JobStatus {
   WISHLIST = 'Wishlist',
   APPLIED = 'Applied',
@@ -57,4 +58,10 @@ export interface GmailSuggestion {
   reason: string; // "Email from recruiter says..."
   emailDate: string;
   emailSnippet: string;
+}
+
+declare global {
+  interface Window {
+    deferredPrompt: any;
+  }
 }

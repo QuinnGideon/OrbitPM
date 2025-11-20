@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { JobApplication, JobStatus, GmailSuggestion } from '../types';
 import Dashboard from './Dashboard';
 import JobCard from './JobCard';
@@ -6,7 +7,7 @@ import JobModal from './JobModal';
 import AddJobModal from './AddJobModal';
 import CalendarView from './CalendarView';
 import { initGoogleAuth, checkGmailForUpdates } from '../services/gmailService';
-import { Layout, Plus, Search, ListFilter, ArrowUpDown, Database, Cloud, Settings, LogOut, Shield, Sun, Moon, Calendar, Sparkles, Mail, CheckCircle, XCircle, BarChart3, Clock } from './Icons';
+import { Layout, Plus, Search, ListFilter, ArrowUpDown, Database, Cloud, Settings, LogOut, Shield, Sun, Moon, Calendar, Sparkles, Mail, CheckCircle, XCircle, BarChart3, Clock, Download } from './Icons';
 import { id } from '@instantdb/react';
 
 type SortOption = 'updated' | 'applied_newest' | 'applied_oldest' | 'company' | 'interest' | 'status';
@@ -42,12 +43,13 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('updated');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
   
   // Gmail Integration State
   const [suggestions, setSuggestions] = useState<GmailSuggestion[]>([]);
   const [isCheckingGmail, setIsCheckingGmail] = useState(false);
   const [showInsights, setShowInsights] = useState(true);
-  const [lastChecked, setLastChecked] = useState<string | null>(localStorage.getItem('pm-orbit-last-gmail-check'));
+  const [lastChecked, setLastChecked] = useState<string | null>(localStorage.getItem('pipeliner-last-gmail-check'));
 
   // Check if scan is overdue (older than 8 hours)
   const isScanOverdue = useMemo(() => {
@@ -65,6 +67,24 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
     if (googleClientId) {
       initGoogleAuth(googleClientId);
     }
+
+    // PWA Install Prompt Capture
+    // Check if the event was already captured in index.html
+    if (window.deferredPrompt) {
+      setInstallPrompt(window.deferredPrompt);
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      window.deferredPrompt = e;
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, [googleClientId]);
 
   const toggleTheme = () => {
@@ -77,6 +97,20 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+  };
+
+  const handleInstallClick = () => {
+    const promptEvent = installPrompt || window.deferredPrompt;
+    if (!promptEvent) return;
+    
+    promptEvent.prompt();
+    promptEvent.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      }
+      setInstallPrompt(null);
+      window.deferredPrompt = null;
+    });
   };
 
   const handleCheckGmail = async () => {
@@ -93,10 +127,9 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
       // Update Last Checked
       const now = new Date().toISOString();
       setLastChecked(now);
-      localStorage.setItem('pm-orbit-last-gmail-check', now);
+      localStorage.setItem('pipeliner-last-gmail-check', now);
 
       if (results.length === 0) {
-        // Optional: Toast notification here
         console.log("No new updates found.");
       }
     } catch (error) {
@@ -186,7 +219,7 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-4 border-primary-200 dark:border-primary-900 border-t-primary-600 dark:border-t-primary-500 rounded-full animate-spin"></div>
-          <p className="text-gray-500 dark:text-gray-400 font-medium">Loading your orbit...</p>
+          <p className="text-gray-500 dark:text-gray-400 font-medium">Loading pipeline...</p>
         </div>
       </div>
     );
@@ -196,12 +229,15 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
       {/* Navbar */}
       <nav className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-8 py-4 flex items-center justify-between shadow-sm transition-colors duration-200">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center text-white shadow-primary-200 dark:shadow-none shadow-lg">
+        <div 
+          className="flex items-center gap-3 cursor-pointer group"
+          onClick={() => setView('board')}
+        >
+          <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center text-white shadow-primary-200 dark:shadow-none shadow-lg group-hover:scale-105 transition-transform">
             <Layout size={22} />
           </div>
           <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-300 hidden sm:block">
-            PM Orbit
+            Pipeliner AI
           </h1>
           
           <div className="hidden md:flex items-center ml-4 px-2 py-1 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-100 dark:border-gray-700 transition-colors">
@@ -231,6 +267,16 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
            >
              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
            </button>
+
+           {installPrompt && (
+             <button 
+               onClick={handleInstallClick}
+               className="p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors animate-pulse"
+               title="Install App"
+             >
+               <Download size={20} />
+             </button>
+           )}
 
            {userEmail && (
              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg text-sm font-medium border border-primary-100 dark:border-primary-800">
@@ -392,8 +438,8 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
 
              <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                <div>
-                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white transition-colors">Active Applications</h2>
-                 <p className="text-gray-500 dark:text-gray-400 mt-1 transition-colors">Manage your pipeline and track progress.</p>
+                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white transition-colors">Active Pipeline</h2>
+                 <p className="text-gray-500 dark:text-gray-400 mt-1 transition-colors">Manage your applications and track progress.</p>
                </div>
                
                <div className="flex items-center gap-3">
@@ -468,4 +514,3 @@ const PMOrbitUI: React.FC<PMOrbitUIProps> = ({
 };
 
 export default PMOrbitUI;
-import { useMemo } from 'react';

@@ -13,26 +13,40 @@ let accessToken: string | null = null;
 
 // Initialize the Google Identity Services client
 export const initGoogleAuth = (clientId: string) => {
-  if (!window.google) return;
-  
-  tokenClient = window.google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/gmail.readonly',
-    callback: (response: any) => {
-      if (response.access_token) {
-        accessToken = response.access_token;
+  const checkGoogle = setInterval(() => {
+    if (window.google && window.google.accounts) {
+      clearInterval(checkGoogle);
+      try {
+        tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/gmail.readonly',
+          callback: (response: any) => {
+            if (response.access_token) {
+              accessToken = response.access_token;
+            } else if (response.error) {
+              console.error("Google Auth Error:", response);
+            }
+          },
+        });
+        console.log("Google Auth initialized successfully");
+      } catch (e) {
+        console.error("Failed to initialize Google Auth:", e);
       }
-    },
-  });
+    }
+  }, 500); // Check every 500ms
+  
+  // Stop checking after 10 seconds to prevent infinite loop
+  setTimeout(() => clearInterval(checkGoogle), 10000);
 };
 
 export const requestGmailPermission = () => {
   return new Promise<string>((resolve, reject) => {
-    if (!tokenClient) return reject("Google Auth not initialized");
+    if (!tokenClient) return reject("Google Auth not initialized. Please reload or check connection.");
     
     // Override callback to capture resolution
     tokenClient.callback = (resp: any) => {
       if (resp.error) {
+        console.error("OAuth Error:", resp);
         reject(resp);
       } else {
         accessToken = resp.access_token;
@@ -55,6 +69,10 @@ const fetchEmails = async () => {
   });
 
   const data = await response.json();
+  if (data.error) {
+    console.error("Gmail API Error:", data.error);
+    throw new Error(data.error.message);
+  }
   return data.messages || [];
 };
 
@@ -120,11 +138,11 @@ const analyzeEmailsWithGemini = async (emailData: any[]): Promise<GmailSuggestio
   };
 
   const prompt = `
-    You are a helpful assistant for a Product Manager tracking their job applications.
+    You are a helpful assistant for a professional tracking their job applications.
     Analyze the following recent emails and identify if any of them indicate a status update for a job application.
     
     Valid Statuses:
-    - Interviewing (scheduling request, next steps)
+    - Interviewing (scheduling request, next steps, case study sent)
     - Offer (offer letter, compensation details)
     - Rejected (thank you for applying, moving forward with other candidates)
     

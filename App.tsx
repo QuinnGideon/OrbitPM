@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Component } from 'react';
 import { init, tx, id } from "@instantdb/react";
 import { JobApplication, JobStatus } from './types';
 import PMOrbitUI from './components/PMOrbitUI';
@@ -40,9 +40,7 @@ interface GlobalErrorBoundaryState {
 }
 
 // --- Global Error Boundary ---
-class GlobalErrorBoundary extends React.Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
-  public state: GlobalErrorBoundaryState;
-
+class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
   constructor(props: GlobalErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -77,7 +75,7 @@ class GlobalErrorBoundary extends React.Component<GlobalErrorBoundaryProps, Glob
       );
     }
 
-    return this.props.children;
+    return this.props.children || null;
   }
 }
 
@@ -87,8 +85,20 @@ const LocalApp: React.FC<{ onOpenSettings: () => void, googleClientId?: string }
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem('pm-orbit-jobs');
-    if (saved) {
+    // Migration Logic: Check for old 'pm-orbit' data and migrate to 'pipeliner'
+    const oldData = localStorage.getItem('pm-orbit-jobs');
+    const saved = localStorage.getItem('pipeliner-jobs');
+
+    if (oldData && !saved) {
+      // Migrate
+      try {
+        setJobs(JSON.parse(oldData));
+        localStorage.setItem('pipeliner-jobs', oldData);
+        // Optional: localStorage.removeItem('pm-orbit-jobs'); // Keep for safety
+      } catch (e) {
+        console.error("Migration failed", e);
+      }
+    } else if (saved) {
       try {
         setJobs(JSON.parse(saved));
       } catch (e) {
@@ -98,7 +108,7 @@ const LocalApp: React.FC<{ onOpenSettings: () => void, googleClientId?: string }
       // Seed data
       setJobs([{
         id: 'demo-1',
-        title: 'Product Manager',
+        title: 'Senior Software Engineer',
         company: 'Example Corp',
         status: JobStatus.WISHLIST,
         interestLevel: 3,
@@ -113,7 +123,7 @@ const LocalApp: React.FC<{ onOpenSettings: () => void, googleClientId?: string }
 
   useEffect(() => {
     if (!isLoading) {
-      localStorage.setItem('pm-orbit-jobs', JSON.stringify(jobs));
+      localStorage.setItem('pipeliner-jobs', JSON.stringify(jobs));
     }
   }, [jobs, isLoading]);
 
@@ -204,8 +214,8 @@ const LoginScreen: React.FC<{ db: any, onBackToSettings: () => void }> = ({ db, 
           <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl mb-3 backdrop-blur-sm">
             <Shield className="text-white" size={24} />
           </div>
-          <h2 className="text-2xl font-bold">Secure Login</h2>
-          <p className="text-primary-100 text-sm mt-1">Access your synced interview data</p>
+          <h2 className="text-2xl font-bold">Pipeliner Cloud</h2>
+          <p className="text-primary-100 text-sm mt-1">Sync your applications securely</p>
           
           <button 
             onClick={onBackToSettings}
@@ -367,7 +377,8 @@ const InstantDBApp: React.FC<{ appId: string, onOpenSettings: () => void, google
   };
 
   const handleUpdate = (job: JobApplication) => {
-    db.transact(tx.jobs[job.id].update(job));
+    // Fix: Spread job object to satisfy InstantDB update type requirements
+    db.transact(tx.jobs[job.id].update({ ...job }));
   };
 
   const handleDelete = (jobId: string) => {
