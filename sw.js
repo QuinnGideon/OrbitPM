@@ -1,3 +1,4 @@
+
 const CACHE_NAME = 'pipeliner-v1';
 const urlsToCache = [
   './',
@@ -6,7 +7,7 @@ const urlsToCache = [
   './manifest.json'
 ];
 
-// INSTALL: Cache core assets immediately
+// INSTALL
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -17,7 +18,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// ACTIVATE: Clean up old caches when a new version is deployed
+// ACTIVATE
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -33,16 +34,28 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// FETCH: Serve from cache first, fall back to network
+// FETCH
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // 1. Bypass Cache for Google Auth & APIs to avoid CORS/Auth issues
+  if (url.hostname.includes('google') || 
+      url.hostname.includes('googleapis') || 
+      url.hostname.includes('gstatic')) {
+    return;
+  }
+
+  // 2. Bypass Cache for InstantDB
+  if (url.hostname.includes('instantdb')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Return cached hit if found
         if (response) {
           return response;
         }
-        // Otherwise fetch from network
         return fetch(event.request);
       })
   );

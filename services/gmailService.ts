@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { JobStatus, GmailSuggestion } from "../types";
 
@@ -13,18 +14,27 @@ let accessToken: string | null = null;
 
 // Initialize the Google Identity Services client
 export const initGoogleAuth = (clientId: string) => {
+  const cleanClientId = clientId.trim();
+  
+  // Log current origin to help user debug redirect_uri_mismatch
+  console.log("Initializing Google Auth");
+  console.log("Current Window Origin:", window.location.origin);
+  console.log("Ensure this Origin is listed in Google Cloud Console > Credentials > Authorized JavaScript origins");
+  console.log("Using Client ID:", cleanClientId);
+
   const checkGoogle = setInterval(() => {
     if (window.google && window.google.accounts) {
       clearInterval(checkGoogle);
       try {
         tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
+          client_id: cleanClientId,
           scope: 'https://www.googleapis.com/auth/gmail.readonly',
           callback: (response: any) => {
             if (response.access_token) {
               accessToken = response.access_token;
+              console.log("Google Access Token received");
             } else if (response.error) {
-              console.error("Google Auth Error:", response);
+              console.error("Google Auth Callback Error:", response);
             }
           },
         });
@@ -41,8 +51,25 @@ export const initGoogleAuth = (clientId: string) => {
 
 export const requestGmailPermission = () => {
   return new Promise<string>((resolve, reject) => {
-    if (!tokenClient) return reject("Google Auth not initialized. Please reload or check connection.");
-    
+    if (!tokenClient) {
+      // Try to re-init if missing (e.g. after refresh)
+      const storedId = localStorage.getItem('google-client-id');
+      if (storedId) {
+        initGoogleAuth(storedId);
+        // Wait a brief moment for init
+        setTimeout(() => {
+          if (!tokenClient) return reject("Google Auth not ready. Please wait a moment and try again.");
+          triggerRequest(resolve, reject);
+        }, 1000);
+        return;
+      }
+      return reject("Google Auth not initialized. Please check your settings.");
+    }
+    triggerRequest(resolve, reject);
+  });
+};
+
+const triggerRequest = (resolve: (token: string) => void, reject: (err: any) => void) => {
     // Override callback to capture resolution
     tokenClient.callback = (resp: any) => {
       if (resp.error) {
@@ -54,8 +81,9 @@ export const requestGmailPermission = () => {
       }
     };
     
+    // ux_mode: 'popup' is default, but making it explicit helps clarity
+    // prompt: 'consent' forces the user to approve, which helps reset stuck states
     tokenClient.requestAccessToken({ prompt: 'consent' });
-  });
 };
 
 const fetchEmails = async () => {
@@ -94,16 +122,24 @@ const getEmailContent = async (messageId: string) => {
 };
 
 export const checkGmailForUpdates = async () => {
+  // Ensure we have a token before fetching
   if (!accessToken) {
     await requestGmailPermission();
   }
 
   try {
     const messages = await fetchEmails();
+    
+    if (!messages || messages.length === 0) {
+        return [];
+    }
+
     const emails = await Promise.all(messages.map((m: any) => getEmailContent(m.id)));
     
     // Filter out empty or irrelevant emails roughly before sending to AI
     const validEmails = emails.filter(e => e && (e.snippet.length > 10));
+
+    if (validEmails.length === 0) return [];
 
     // Use Gemini to analyze
     return await analyzeEmailsWithGemini(validEmails);

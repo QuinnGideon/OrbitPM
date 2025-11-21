@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, Component } from 'react';
 import { init, tx, id } from "@instantdb/react";
 import { JobApplication, JobStatus } from './types';

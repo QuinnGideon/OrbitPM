@@ -1,3 +1,4 @@
+
 # Pipeliner AI 🚀
 
 **Pipeliner AI** (formerly PM Orbit) is an intelligent, AI-powered career companion designed to help professionals track job applications, visualize interview timelines, and manage their career pipeline with ease.
@@ -67,7 +68,9 @@ To enable **Inbox Insights**:
     *   Add your email as a Test User.
 5.  Create Credentials (**OAuth Client ID**):
     *   Type: Web Application
-    *   Authorized Origins: `http://localhost:5173` (and your deployed URL)
+    *   Authorized Origins (Add **BOTH**):
+        *   `http://localhost:5173`
+        *   `https://pipeliner-ai-12201177322.us-west1.run.app`
 6.  Copy the **Client ID** and paste it into the app Settings.
 
 ## 🔒 Privacy
